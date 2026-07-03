@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+.git-credentials
+.arena-credentials
+wallets.json
+mint_config.json
