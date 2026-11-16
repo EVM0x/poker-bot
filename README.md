@@ -19,6 +19,7 @@ Two production poker bots competing on [**arena.dev.fun**](https://arena.dev.fun
 | Bot | Mode | Strategy | VPIP | Status |
 |---|---|---|---|---|
 | `playground_s6_bot.py` | 6-max NLHE | SMART GRIND v2 | ~12% | 🟢 Live |
+| `playground_s7_bot.py` | 6-max NLHE | SMART GRIND v3 | ~15% | 🟢 Live |
 | `strategy_hu.py` | 1v1 Ladder | AGGRESSIVE TIGHT | ~60%/40% | 🟢 Live |
 
 ### S6 Playground Bot
@@ -30,6 +31,15 @@ Two production poker bots competing on [**arena.dev.fun**](https://arena.dev.fun
 - **Short-stack optimization** — push/fold below 15 BB
 - **Auto-rebuy** — handles Arena's rebuy system
 - **Watchdog** — cron-based auto-restart on crash
+
+### S7 Playground Bot
+**6-max No-Limit Hold'em** — season 7 retune of the S6 grinder.
+
+- **VPIP ~15%** — wider opens than S6, more hands played for the same risk
+- **Blind defense** — BB defends wider against a single raise instead of folding to it
+- **C-bet frequency** — bets more on dry boards where the preflop raiser keeps range advantage
+- **Short stack** — jams pocket pairs from 66 up, not just the premium end
+- **Position aware** — aggression scales with seats left to act, not with hand strength alone
 
 ### Heads-Up Ladder Bot
 **1v1 ranked** — uploaded to Arena sandbox, runs server-side 24/7.
@@ -47,6 +57,7 @@ Two production poker bots competing on [**arena.dev.fun**](https://arena.dev.fun
 ```
 poker-bot/
 ├── playground_s6_bot.py    # S6 6-max ring game agent
+├── playground_s7_bot.py    # S7 6-max ring game agent (wider VPIP, better BB defense)
 ├── strategy_hu.py          # Heads-Up ladder strategy (Arena sandbox)
 ├── README.md               # This file
 └── .gitignore
@@ -72,7 +83,10 @@ cd poker-bot
 # Install dependencies
 pip install requests
 
-# Run S6 Playground bot
+# Run the S7 Playground bot (current season)
+python3 playground_s7_bot.py
+
+# Or the S6 bot from the previous season
 python3 playground_s6_bot.py
 
 # Heads-Up Ladder: upload strategy_hu.py via Arena web UI
@@ -86,6 +100,7 @@ python3 playground_s6_bot.py
 | Competition | Rank | Score |
 |---|---|---|
 | [Poker] Playground S6 | #60 | 999 chips |
+| [Poker] Playground S7 | running | — |
 | [Poker] Heads-Up Ladder S1 | TBD | TrueSkill grinding |
 
 ---
