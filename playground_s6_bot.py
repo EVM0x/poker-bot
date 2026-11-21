@@ -25,10 +25,24 @@ CID = "cmr4ou75y1s6vt9h91hqybbsd"
 BASE = "https://arena.dev.fun/api/arena"
 PID_FILE = "/tmp/poker_s6_bot.pid"
 
-with open(os.path.expanduser("~/.arena-credentials")) as f:
-    _cred = json.load(f)
-API_KEY = _cred["apiKey"]
-AGENT_ID = _cred["agentId"]
+API_KEY = None
+AGENT_ID = None
+
+
+def _load_credentials():
+    """Read the arena credentials the first time they are needed.
+
+    This used to run at import time, which meant the decision logic could not be
+    imported without a live account on disk, so it could not be tested at all.
+    """
+    global API_KEY, AGENT_ID
+    if API_KEY is None:
+        with open(os.path.expanduser("~/.arena-credentials")) as f:
+            cred = json.load(f)
+        API_KEY = cred["apiKey"]
+        AGENT_ID = cred["agentId"]
+
+AGENT_ID = None
 
 RANKS = {r: i for i, r in enumerate("23456789TJQKA")}
 
@@ -59,6 +73,19 @@ def make_hand_key(c1, c2):
         return f"{hi}{lo}"
     return f"{hi}{lo}{'s' if s1 == s2 else 'o'}"
 
+def legal_bet(pot, fraction, stack, min_raise):
+    """A bet the table will accept, or None when no legal bet is that small.
+
+    `minRaiseTo` is the smallest amount the server accepts. The bet sites below
+    used to ignore it and return whatever the fraction worked out to, so a small
+    pot produced a bet of 0, which the server rejects and the bot retries.
+    """
+    size = int(pot * fraction) if pot > 0 else min_raise
+    if size > stack:
+        return stack
+    return size if size >= min_raise else None
+
+
 def hand_strength(hole, board):
     if len(hole) < 2:
         return 0
@@ -74,6 +101,7 @@ def hand_strength(hole, board):
     has_two_pair = sum(1 for c in rc.values() if c >= 2) >= 2
     has_trips = any(c >= 3 for c in rc.values())
     has_quads = any(c >= 4 for c in rc.values())
+    has_full_house = has_trips and has_two_pair
 
     sc = {}
     for s in suits:
@@ -91,6 +119,7 @@ def hand_strength(hole, board):
 
     if has_straight and has_flush: base = 100
     elif has_quads: base = 95
+    elif has_full_house: base = 92
     elif has_flush: base = 90
     elif has_straight: base = 85
     elif has_trips: base = 80
@@ -105,6 +134,7 @@ def hand_strength(hole, board):
     return min(base, 100)
 
 def api(method, path, body=None):
+    _load_credentials()
     url = BASE + path
     headers = {"x-arena-api-key": API_KEY, "Content-Type": "application/json"}
     data = json.dumps(body).encode() if body else None
@@ -236,15 +266,19 @@ def decide(hole, board, stack, bb, pot, current_bet, min_raise, position, seat_c
             if current_bet <= pot * 1.5:
                 return ("call", current_bet, "call strong")
             return ("fold", 0, "overbet vs strong")
-        bet_size = int(pot * 1.2) if pot > 0 else min_raise
-        return ("bet", min(bet_size, stack), "value bet 1.2x")
+        size = legal_bet(pot, 1.2, stack, min_raise)
+        if size is None:
+            return ("check", 0, "value bet 1.2x, below min raise")
+        return ("bet", size, "value bet 1.2x")
 
     # MEDIUM (top pair weak kicker, middle pair) — pot control
     if strength >= 55:
         if current_bet == 0:
             if not is_scary:
-                bet_size = int(pot * 0.6) if pot > 0 else min_raise
-                return ("bet", min(bet_size, stack), "c-bet safe")
+                size = legal_bet(pot, 0.6, stack, min_raise)
+                if size is None:
+                    return ("check", 0, "c-bet safe, below min raise")
+                return ("bet", size, "c-bet safe")
             return ("check", 0, "check medium scary")
         if current_bet <= pot * 0.35:
             return ("call", current_bet, "call medium small")
@@ -264,6 +298,7 @@ def decide(hole, board, stack, bb, pot, current_bet, min_raise, position, seat_c
     return ("check", 0, "check trash")
 
 def main():
+    _load_credentials()
     print(f"=== evm0x never die S6 v2 SMART GRIND ===")
     print(f"Agent: {AGENT_ID} | Competition: {CID}")
 
