@@ -6,6 +6,8 @@ RANKS = {r: i for i, r in enumerate("23456789TJQKA")}
 def hand_key(c1, c2):
     r1, s1 = c1[0], c1[1]; r2, s2 = c2[0], c2[1]
     hi, lo, suited = (r1, r2, s1 == s2) if RANKS.get(r1,0) >= RANKS.get(r2,0) else (r2, r1, s1 == s2)
+    # Pocket pairs are written "AA", never "AAo"/"AAs" — every range set spells them that way.
+    if hi == lo: return f"{hi}{lo}"
     return f"{hi}{lo}{'s' if suited else 'o'}"
 
 def hand_strength(hole, board):
