@@ -53,9 +53,11 @@ PREMIUM = {"AA", "KK", "QQ", "AKs", "AKo"}
 def make_hand_key(c1, c2):
     r1, s1 = c1[0], c1[1]
     r2, s2 = c2[0], c2[1]
-    if RANKS.get(r1, 0) >= RANKS.get(r2, 0):
-        return f"{r1}{r2}{'s' if s1 == s2 else 'o'}"
-    return f"{r2}{r1}{'s' if s1 == s2 else 'o'}"
+    hi, lo = (r1, r2) if RANKS.get(r1, 0) >= RANKS.get(r2, 0) else (r2, r1)
+    # Pocket pairs are written "AA", never "AAo"/"AAs" — every range set spells them that way.
+    if hi == lo:
+        return f"{hi}{lo}"
+    return f"{hi}{lo}{'s' if s1 == s2 else 'o'}"
 
 def hand_strength(hole, board):
     if len(hole) < 2:
