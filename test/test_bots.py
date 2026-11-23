@@ -11,11 +11,15 @@ of them is a bug that is still live in the other.
 Run: python3 -m unittest discover -s test -v
 """
 
+import contextlib
 import importlib
+import io
 import json
 import os
 import sys
 import tempfile
+import time
+import types
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -281,6 +285,77 @@ class DecideTest(unittest.TestCase):
             first = decide(**spot())
             for _ in range(20):
                 self.assertEqual(decide(**spot()), first, name)
+
+
+class MainLoopTest(unittest.TestCase):
+    """`main()` has to get as far as POSTing the action it decided on."""
+
+    TABLE = {
+        "tableId": "t1",
+        "street": "preflop",
+        "actionDeadlineAt": None,
+        "currentSeatNumber": 3,
+        "seats": [
+            {"agentId": "test-agent", "seatNumber": 3, "holeCards": ["Ah", "Ad"], "stackChips": 100}
+        ],
+        "potChips": 3,
+        "currentBet": 0,
+        "minRaiseTo": 4,
+        "bigBlindChips": 2,
+        "boardCards": [],
+    }
+
+    def _one_tick(self, name):
+        """Run main() until it has slept a few times, with the network stubbed."""
+        module = load(name)
+        posted = []
+        ticks = {"sleeps": 0}
+
+        class Stop(Exception):
+            pass
+
+        def fake_api(method, path, body=None):
+            if "pending-actions" in path:
+                return {"tables": [self.TABLE]}
+            if path.endswith("/action"):
+                posted.append(body)
+                return {"kind": "ok"}
+            return {}
+
+        def fake_sleep(_seconds):
+            ticks["sleeps"] += 1
+            if ticks["sleeps"] > 4:
+                raise Stop
+
+        saved = (module.api, module._load_credentials, module.AGENT_ID,
+                 module.API_KEY, module.PID_FILE, module.time)
+        module.api = fake_api
+        module._load_credentials = lambda: None
+        module.AGENT_ID = "test-agent"
+        module.API_KEY = "test-key"
+        module.PID_FILE = os.path.join(tempfile.mkdtemp(), "pid")
+        module.time = types.SimpleNamespace(time=time.time, sleep=fake_sleep)
+        output = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(output):
+                with self.assertRaises(Stop):
+                    module.main()
+        finally:
+            (module.api, module._load_credentials, module.AGENT_ID,
+             module.API_KEY, module.PID_FILE, module.time) = saved
+        return posted, output.getvalue()
+
+    def test_an_action_is_actually_sent(self):
+        # Regression: the s6 log line interpolated `bb_count`, which only the s7
+        # main() defines. Every action raised NameError before the POST, the
+        # blanket `except Exception` swallowed it, and the bot retried forever
+        # without ever putting a chip in the pot.
+        for name in BOTS:
+            posted, output = self._one_tick(name)
+            self.assertNotIn("bb_count", output, "%s: %s" % (name, output[:400]))
+            self.assertEqual(len(posted), 1, "%s posted %r; output: %s" % (name, posted, output[:400]))
+            self.assertIn("bb=", posted[0]["message"], name)
+            self.assertIn("action", posted[0], name)
 
 
 if __name__ == "__main__":

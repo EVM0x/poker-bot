@@ -395,6 +395,7 @@ def main():
 
                 hand_key = make_hand_key(*hole)
                 hand_str = hand_strength(hole, board)
+                bb_count = stack // bb if bb > 0 else 100
 
                 body = {
                     "tableId": tid,
